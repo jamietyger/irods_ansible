@@ -1,0 +1,25 @@
+---
+
+- name: install postgres
+  apt: 
+    name: "{{ item }}"
+    update_cache: yes
+    state: present
+  loop: 
+    - postgresql
+    - postgresql-contrib
+    - python-psycopg2
+
+- name: create icat database
+  become_user: postgres
+  postgresql_db:
+    name: "ICAT"
+
+- name: create icat user
+  become_user: postgres
+  postgresql_user:
+    name: irods
+    db: "ICAT"
+    password: testpassword
+    priv: ALL
+

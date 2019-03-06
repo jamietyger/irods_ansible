@@ -1,0 +1,66 @@
+---
+
+- name: get irods apt key
+  apt_key: 
+    url: https://packages.irods.org/irods-signing-key.asc
+    state : present
+- name: add irods apt repository
+  apt_repository: 
+    repo: "deb [arc=amd64] https://packages.irods.org/apt/ {{ ansible_distribution_release }} main"
+    filename: renci-irods.list
+
+- name: install irods
+  apt:
+    name: "{{item}}"
+    state: present
+    update_cache: yes
+  loop:
+    - irods-server
+    - irods-database-plugin-postgres
+
+- name: correct host name
+  block:
+    - name: run hostname command
+      shell: "hostname {{ ansible_hostname.split('.')[0] }}.sanbi.ac.za"
+      changed_when: false
+    - name: change hostname file
+      lineinfile: 
+        path: /etc/hostname
+        regexp: '.*'
+        line: "{{ ansible_hostname.split('.')[0] }}.sanbi.ac.za"
+
+- name: correct hosts file
+  template:
+    src: "{{role_path}}/files/hosts.j2"
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: 0644
+
+- name: deploy config files
+  template: 
+    src: "{{role_path}}/files/setup_input.txt.j2"
+    dest: "/home/ubuntu/setup_input.txt"
+
+- name: check if irods is setup
+  stat: 
+    path: /home/ubuntu/complete
+  register: do_install
+
+- name: irods post install
+  shell: "python /var/lib/irods/scripts/setup_irods.py < setup_input.txt" 
+  register: failed
+  failed_when: false
+  when: not do_install.stat.exists
+
+- set_fact:
+    failed:
+      rc: 1
+  when: do_install.stat.exists
+
+- copy: 
+    content: ""
+    dest: "/home/ubuntu/complete"
+    force: no
+  when: "failed.rc == 0"
+
